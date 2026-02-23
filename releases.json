@@ -1,9 +1,77 @@
 {
   "schema": 1,
-  "latest": "0.1.7",
-  "force_min_version": "0.1.7",
+  "latest": "0.1.8",
+  "force_min_version": "0.1.8",
   "channel": "stable",
   "releases": [
+    {
+      "version": "0.1.8",
+      "published_at": "2026-02-23T14:30:00Z",
+      "is_forced": true,
+      "force_reason": "Security hardening: embed server HMAC secret at build time to prevent MITM response forgery; all users on v0.1.5/v0.1.6/v0.1.7 must upgrade",
+      "changelog": {
+        "zh": "【强制安全升级】嵌入服务端 HMAC 密钥以防止 MITM 响应伪造攻击；启动时明确记录 HMAC 密钥注入状态；所有旧版本用户必须升级至此版本",
+        "en": "[Forced Security] Embed server HMAC secret at build time to prevent MITM response signature forgery; log HMAC injection status at startup; all users on older versions must upgrade"
+      },
+      "artifacts": [
+        {
+          "os": "linux",
+          "arch": "amd64",
+          "filename": "gococms_0.1.8_linux_amd64.zip",
+          "sha256": "146cc1a003c5e603f98bdac0aa60054d77c6b2c9f43cf198623be0e01a21a72d",
+          "size_bytes": 16754839,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v0.1.8/gococms_0.1.8_linux_amd64.zip"
+        },
+        {
+          "os": "linux",
+          "arch": "arm64",
+          "filename": "gococms_0.1.8_linux_arm64.zip",
+          "sha256": "4f4264837f86ce42c7d8fc95f48b748553a4e5cf6dfeafb801e58b4c871a19ac",
+          "size_bytes": 15533025,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v0.1.8/gococms_0.1.8_linux_arm64.zip"
+        },
+        {
+          "os": "linux",
+          "arch": "armv7",
+          "filename": "gococms_0.1.8_linux_armv7.zip",
+          "sha256": "6f5dbc671f0c1267265edb2ee2d4132bcf3f95a3430d302b3507561cc57c9450",
+          "size_bytes": 15884122,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v0.1.8/gococms_0.1.8_linux_armv7.zip"
+        },
+        {
+          "os": "darwin",
+          "arch": "amd64",
+          "filename": "gococms_0.1.8_darwin_amd64.zip",
+          "sha256": "e1071cb92b628dca43d8f1332512390bf1ad777c908169a098e68210f9f48f83",
+          "size_bytes": 16952607,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v0.1.8/gococms_0.1.8_darwin_amd64.zip"
+        },
+        {
+          "os": "darwin",
+          "arch": "arm64",
+          "filename": "gococms_0.1.8_darwin_arm64.zip",
+          "sha256": "b6a9e40f90025d4daebdd27750a5402b3b639254e04d2e19cdfb792c3d664007",
+          "size_bytes": 16090956,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v0.1.8/gococms_0.1.8_darwin_arm64.zip"
+        },
+        {
+          "os": "windows",
+          "arch": "amd64",
+          "filename": "gococms_0.1.8_windows_amd64.zip",
+          "sha256": "20dad98fd259061de20ad1bfa329b549ff92c6330a6441a864b60a83e3af2560",
+          "size_bytes": 16979208,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v0.1.8/gococms_0.1.8_windows_amd64.zip"
+        },
+        {
+          "os": "windows",
+          "arch": "arm64",
+          "filename": "gococms_0.1.8_windows_arm64.zip",
+          "sha256": "8d9508b3ed5d13b6e9a244d0b0316b5c16abf275559100070b9fe99ed3ca1223",
+          "size_bytes": 15567316,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v0.1.8/gococms_0.1.8_windows_arm64.zip"
+        }
+      ]
+    },
     {
       "version": "0.1.7",
       "published_at": "2026-02-23T13:00:00Z",
