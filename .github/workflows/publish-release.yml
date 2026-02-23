@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version string (e.g. 3.2.0 – no leading v)'
+        description: 'Version string (e.g. 0.1.5 – no leading v)'
         required: true
       goco_app_ref:
         description: 'goco-app git ref (tag/branch/SHA to build from)'
@@ -44,17 +44,32 @@ permissions:
 jobs:
   # ── Build one binary per platform ──────────────────────────────────────────
   build:
-    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}${{ matrix.goarm != '' && format('v{0}', matrix.goarm) || '' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
           - goos: linux
             goarch: amd64
+            goarm: ''
           - goos: linux
             goarch: arm64
+            goarm: ''
+          - goos: linux
+            goarch: arm
+            goarm: '7'
+          - goos: darwin
+            goarch: amd64
+            goarm: ''
           - goos: darwin
             goarch: arm64
+            goarm: ''
+          - goos: windows
+            goarch: amd64
+            goarm: ''
+          - goos: windows
+            goarch: arm64
+            goarm: ''
 
     steps:
       - name: Resolve inputs
@@ -63,8 +78,14 @@ jobs:
         run: |
           VERSION="${{ github.event.inputs.version || github.event.client_payload.version }}"
           REF="${{ github.event.inputs.goco_app_ref || github.event.client_payload.goco_app_ref || 'main' }}"
+          SUFFIX="${{ matrix.goarm != '' && format('v{0}', matrix.goarm) || '' }}"
+          PLATFORM="${{ matrix.goos }}_${{ matrix.goarch }}${SUFFIX}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
+          BINARY="gococms"
+          [[ "${{ matrix.goos }}" == "windows" ]] && BINARY="gococms.exe"
+          echo "binary=$BINARY" >> "$GITHUB_OUTPUT"
 
       - name: Checkout goco-app
         uses: actions/checkout@v4
@@ -96,36 +117,39 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: '0'
           VERSION: ${{ steps.resolve.outputs.version }}
           LICENSE_HMAC_SECRET: ${{ secrets.LICENSE_HMAC_SECRET }}
           RELEASE_SIGNING_PUB_KEY_B64: ${{ secrets.RELEASE_SIGNING_PUB_KEY_B64 }}
         run: |
           BUILD_TIME="$(date --utc -Iseconds)"
-          go build -o palacms \
+          go build -o "${{ steps.resolve.outputs.binary }}" \
             -ldflags "\
               -X 'github.com/palacms/palacms/internal.buildVersion=${VERSION}' \
               -X 'github.com/palacms/palacms/internal.buildTime=${BUILD_TIME}' \
               -X 'github.com/palacms/palacms/internal.licenseServerHMACSecret=${LICENSE_HMAC_SECRET}' \
               -X 'github.com/palacms/palacms/internal.releaseSigningPubKeyB64=${RELEASE_SIGNING_PUB_KEY_B64}' \
-            " ./...
+            " .
 
-      - name: Package tarball
+      - name: Package zip
+        id: package
         run: |
-          TARBALL="palacms-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz"
-          tar -czf "$TARBALL" palacms
-          SHA256="$(sha256sum "$TARBALL" | awk '{print $1}')"
-          SIZE="$(stat -c%s "$TARBALL")"
-          echo "{\"os\":\"${{ matrix.goos }}\",\"arch\":\"${{ matrix.goarch }}\",\"filename\":\"${TARBALL}\",\"sha256\":\"${SHA256}\",\"size_bytes\":${SIZE}}" \
+          ZIPNAME="gococms_${{ steps.resolve.outputs.version }}_${{ steps.resolve.outputs.platform }}.zip"
+          zip -9 "$ZIPNAME" "${{ steps.resolve.outputs.binary }}"
+          SHA256="$(sha256sum "$ZIPNAME" | awk '{print $1}')"
+          SIZE="$(stat -c%s "$ZIPNAME")"
+          echo "{\"os\":\"${{ matrix.goos }}\",\"arch\":\"${{ matrix.goarch }}${{ matrix.goarm != '' && format('v{0}', matrix.goarm) || '' }}\",\"filename\":\"${ZIPNAME}\",\"sha256\":\"${SHA256}\",\"size_bytes\":${SIZE}}" \
             > artifact-meta.json
           echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
-        id: package
+          echo "zipname=${ZIPNAME}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload tarball artifact
+      - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: palacms-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: gococms-${{ steps.resolve.outputs.platform }}
           path: |
-            palacms-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+            gococms_${{ steps.resolve.outputs.version }}_${{ steps.resolve.outputs.platform }}.zip
             artifact-meta.json
 
   # ── Sign, release, and update releases.json ────────────────────────────────
@@ -179,11 +203,11 @@ jobs:
           mkdir -p "releases/v${VERSION}"
           CHECKSUMS_FILE="releases/v${VERSION}/checksums.txt"
           > "$CHECKSUMS_FILE"
-          for dir in dist/palacms-*/; do
-            tarball="$(ls "$dir"*.tar.gz 2>/dev/null | head -1)"
-            if [[ -n "$tarball" ]]; then
-              sha256sum "$tarball" | awk '{print $1"  "'$tarball'}' \
-                | sed 's|dist/palacms-[^/]*/||' >> "$CHECKSUMS_FILE"
+          for dir in dist/gococms-*/; do
+            zipfile="$(ls "$dir"*.zip 2>/dev/null | head -1)"
+            if [[ -n "$zipfile" ]]; then
+              sha256sum "$zipfile" | awk '{print $1"  "'$zipfile'}' \
+                | sed 's|dist/gococms-[^/]*/||' >> "$CHECKSUMS_FILE"
             fi
           done
           cat "$CHECKSUMS_FILE"
@@ -191,7 +215,7 @@ jobs:
           echo "$MINISIGN_SECRET_KEY_B64" | base64 -d > /tmp/release.key
           echo "$MINISIGN_KEY_PASSWORD" \
             | minisign -S -s /tmp/release.key \
-                -t "goco-releases v${VERSION}" \
+                -t "gococms-releases v${VERSION}" \
                 -m "$CHECKSUMS_FILE"
           rm -f /tmp/release.key
           # Store the inline base64 signature for embedding into releases.json
@@ -226,7 +250,6 @@ jobs:
             const metaPath = path.join(distDir, entry, 'artifact-meta.json');
             if (!fs.existsSync(metaPath)) { continue; }
             const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-            meta.minisig = '';          // per-file sig not used; checksums.txt sig covers all
             meta.checksums_minisig_b64 = sigB64;
             meta.download_url =
               `https://github.com/3mmmbulus/goco-releases/releases/download/v${version}/${meta.filename}`;
@@ -268,16 +291,16 @@ jobs:
           VERSION: ${{ steps.resolve.outputs.version }}
         run: |
           TAG="v${VERSION}"
-          # Collect tarballs and the checksums + signature files.
+          # Collect zips and the checksums + signature files.
           FILES=()
-          for dir in dist/palacms-*/; do
-            for f in "$dir"*.tar.gz; do [[ -f "$f" ]] && FILES+=("$f"); done
+          for dir in dist/gococms-*/; do
+            for f in "$dir"*.zip; do [[ -f "$f" ]] && FILES+=("$f"); done
           done
           FILES+=("releases/v${VERSION}/checksums.txt"
                   "releases/v${VERSION}/checksums.txt.minisig")
           gh release create "$TAG" \
             --repo "${{ github.repository }}" \
-            --title "palacms v${VERSION}" \
+            --title "gococms v${VERSION}" \
             --notes "See releases/v${VERSION}/release.json for changelog and checksums." \
             "${FILES[@]}"
 
