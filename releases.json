@@ -1,9 +1,77 @@
 {
   "schema": 1,
-  "latest": "0.1.5",
+  "latest": "0.1.6",
   "force_min_version": "0.1.5",
   "channel": "stable",
   "releases": [
+    {
+      "version": "0.1.6",
+      "published_at": "2026-02-23T12:00:00Z",
+      "is_forced": false,
+      "force_reason": null,
+      "changelog": {
+        "zh": "优化升级机制文档注释；改进构建时密钥注入说明；性能优化",
+        "en": "Improve upgrade signing key documentation; clarify build-time injection; performance optimizations"
+      },
+      "artifacts": [
+        {
+          "os": "linux",
+          "arch": "amd64",
+          "filename": "gococms_0.1.6_linux_amd64.zip",
+          "sha256": "0b05b02f4ef81f33956c0987d7c0a73c6e78d26edca753328b43594fc78208bf",
+          "size_bytes": 16664889,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v0.1.6/gococms_0.1.6_linux_amd64.zip"
+        },
+        {
+          "os": "linux",
+          "arch": "arm64",
+          "filename": "gococms_0.1.6_linux_arm64.zip",
+          "sha256": "f6b58c3c3b34af3805942abf2938241308882e661831662356c57405dc1760db",
+          "size_bytes": 15463732,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v0.1.6/gococms_0.1.6_linux_arm64.zip"
+        },
+        {
+          "os": "linux",
+          "arch": "armv7",
+          "filename": "gococms_0.1.6_linux_armv7.zip",
+          "sha256": "bef7c2b5b375e722622019e60f79f2210d3bd619c18443cdf4fa08700f6ecd51",
+          "size_bytes": 15788595,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v0.1.6/gococms_0.1.6_linux_armv7.zip"
+        },
+        {
+          "os": "darwin",
+          "arch": "amd64",
+          "filename": "gococms_0.1.6_darwin_amd64.zip",
+          "sha256": "09befc0d37159c64dd1be04238beb628f42a9b109f3b0f8323ed41fb103a18c9",
+          "size_bytes": 16870189,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v0.1.6/gococms_0.1.6_darwin_amd64.zip"
+        },
+        {
+          "os": "darwin",
+          "arch": "arm64",
+          "filename": "gococms_0.1.6_darwin_arm64.zip",
+          "sha256": "9ec9e9c0c2be312fa54191eaeccea22cb720ef86fa493b7e6542276f8140f625",
+          "size_bytes": 16026906,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v0.1.6/gococms_0.1.6_darwin_arm64.zip"
+        },
+        {
+          "os": "windows",
+          "arch": "amd64",
+          "filename": "gococms_0.1.6_windows_amd64.zip",
+          "sha256": "4b3df12d2d3d0e153660212bd73b94f84a3f699be801051314a2b36ef0d4b5ae",
+          "size_bytes": 16893775,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v0.1.6/gococms_0.1.6_windows_amd64.zip"
+        },
+        {
+          "os": "windows",
+          "arch": "arm64",
+          "filename": "gococms_0.1.6_windows_arm64.zip",
+          "sha256": "3e9ae758cf0184e75cf069f2f6925afc5bd0f8c30591a6428cffa80b2826060d",
+          "size_bytes": 15503008,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v0.1.6/gococms_0.1.6_windows_arm64.zip"
+        }
+      ]
+    },
     {
       "version": "0.1.5",
       "published_at": "2026-02-23T11:00:00Z",
