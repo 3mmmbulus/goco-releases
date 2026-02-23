@@ -1,0 +1,10 @@
+# Place the minisign public key here as release-signing.pub
+#
+# Generate a keypair (keep the private key offline / in a hardware token):
+#   minisign -G -p keys/release-signing.pub -s /path/to/offline/release-signing.key
+#
+# The public key content will be embedded into goco-app at build time:
+#   go build -ldflags "-X internal.releaseSigningPubKey=$(cat keys/release-signing.pub | base64 -w0)" ...
+#
+# The private key is NEVER committed to this repository.
+# Store it in a CI/CD secret (MINISIGN_SECRET_KEY) for use by publish-release.yml.

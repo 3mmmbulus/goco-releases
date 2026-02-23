@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "latest": "3.1.0",
+  "force_min_version": "3.1.0",
+  "channel": "stable",
+  "releases": [
+    {
+      "version": "3.1.0",
+      "published_at": "2026-02-23T00:00:00Z",
+      "is_forced": false,
+      "force_reason": null,
+      "changelog": {
+        "zh": "安全加固：HMAC 响应签名验证、授权码缓存防篡改、Grace Period 绝对截止时间",
+        "en": "Security hardening: HMAC response signature verification, license cache HMAC protection, grace period absolute deadline"
+      },
+      "min_go": "1.24",
+      "artifacts": [
+        {
+          "os": "linux",
+          "arch": "amd64",
+          "filename": "palacms-linux-amd64.tar.gz",
+          "sha256": "",
+          "minisig": "",
+          "size_bytes": 0,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v3.1.0/palacms-linux-amd64.tar.gz"
+        },
+        {
+          "os": "linux",
+          "arch": "arm64",
+          "filename": "palacms-linux-arm64.tar.gz",
+          "sha256": "",
+          "minisig": "",
+          "size_bytes": 0,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v3.1.0/palacms-linux-arm64.tar.gz"
+        },
+        {
+          "os": "darwin",
+          "arch": "arm64",
+          "filename": "palacms-darwin-arm64.tar.gz",
+          "sha256": "",
+          "minisig": "",
+          "size_bytes": 0,
+          "download_url": "https://github.com/3mmmbulus/goco-releases/releases/download/v3.1.0/palacms-darwin-arm64.tar.gz"
+        }
+      ]
+    }
+  ]
+}

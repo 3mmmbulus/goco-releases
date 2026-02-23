@@ -1,0 +1,292 @@
+name: Publish Release
+
+# Triggered manually or via repository_dispatch from goco-app's CI.
+# Required secrets:
+#   LICENSE_HMAC_SECRET          – matches goco-pocketbase-users LICENSE_HMAC_SECRET
+#   RELEASE_SIGNING_PUB_KEY_B64 – base64-encoded minisign public key (content of keys/release-signing.pub)
+#   MINISIGN_SECRET_KEY_B64     – base64-encoded minisign secret key (NEVER commit; offline/CI-only)
+#   MINISIGN_KEY_PASSWORD       – password protecting the minisign secret key
+#   GOCO_APP_TOKEN              – fine-grained PAT with read access to the goco-app repo
+#   RELEASES_PUSH_TOKEN         – fine-grained PAT with write access to goco-releases (contents)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version string (e.g. 3.2.0 – no leading v)'
+        required: true
+      goco_app_ref:
+        description: 'goco-app git ref (tag/branch/SHA to build from)'
+        required: true
+        default: 'main'
+      is_forced:
+        description: 'Force all clients below force_min_version to upgrade'
+        required: false
+        default: 'false'
+      force_min_version:
+        description: 'Minimum allowed version (leave empty to default to <version>)'
+        required: false
+      changelog_zh:
+        description: 'Changelog – Chinese'
+        required: false
+        default: ''
+      changelog_en:
+        description: 'Changelog – English'
+        required: false
+        default: ''
+
+  repository_dispatch:
+    types: [publish-release]
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Build one binary per platform ──────────────────────────────────────────
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: arm64
+
+    steps:
+      - name: Resolve inputs
+        id: resolve
+        shell: bash
+        run: |
+          VERSION="${{ github.event.inputs.version || github.event.client_payload.version }}"
+          REF="${{ github.event.inputs.goco_app_ref || github.event.client_payload.goco_app_ref || 'main' }}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout goco-app
+        uses: actions/checkout@v4
+        with:
+          repository: 3mmmbulus/goco-app
+          ref: ${{ steps.resolve.outputs.ref }}
+          token: ${{ secrets.GOCO_APP_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build frontend
+        run: |
+          npm ci
+          npx svelte-kit sync
+          npx vite --config common.config.js build
+          npx vite --config app.config.js build
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+          LICENSE_HMAC_SECRET: ${{ secrets.LICENSE_HMAC_SECRET }}
+          RELEASE_SIGNING_PUB_KEY_B64: ${{ secrets.RELEASE_SIGNING_PUB_KEY_B64 }}
+        run: |
+          BUILD_TIME="$(date --utc -Iseconds)"
+          go build -o palacms \
+            -ldflags "\
+              -X 'github.com/palacms/palacms/internal.buildVersion=${VERSION}' \
+              -X 'github.com/palacms/palacms/internal.buildTime=${BUILD_TIME}' \
+              -X 'github.com/palacms/palacms/internal.licenseServerHMACSecret=${LICENSE_HMAC_SECRET}' \
+              -X 'github.com/palacms/palacms/internal.releaseSigningPubKeyB64=${RELEASE_SIGNING_PUB_KEY_B64}' \
+            " ./...
+
+      - name: Package tarball
+        run: |
+          TARBALL="palacms-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz"
+          tar -czf "$TARBALL" palacms
+          SHA256="$(sha256sum "$TARBALL" | awk '{print $1}')"
+          SIZE="$(stat -c%s "$TARBALL")"
+          echo "{\"os\":\"${{ matrix.goos }}\",\"arch\":\"${{ matrix.goarch }}\",\"filename\":\"${TARBALL}\",\"sha256\":\"${SHA256}\",\"size_bytes\":${SIZE}}" \
+            > artifact-meta.json
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+        id: package
+
+      - name: Upload tarball artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: palacms-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            palacms-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+            artifact-meta.json
+
+  # ── Sign, release, and update releases.json ────────────────────────────────
+  sign-and-publish:
+    name: Sign + publish
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout goco-releases
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.RELEASES_PUSH_TOKEN || github.token }}
+
+      - name: Resolve inputs
+        id: resolve
+        shell: bash
+        run: |
+          VERSION="${{ github.event.inputs.version || github.event.client_payload.version }}"
+          IS_FORCED="${{ github.event.inputs.is_forced || 'false' }}"
+          FORCE_MIN="${{ github.event.inputs.force_min_version || '' }}"
+          if [[ -z "$FORCE_MIN" ]]; then FORCE_MIN="$VERSION"; fi
+          CL_ZH="${{ github.event.inputs.changelog_zh || '' }}"
+          CL_EN="${{ github.event.inputs.changelog_en || '' }}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "is_forced=$IS_FORCED" >> "$GITHUB_OUTPUT"
+          echo "force_min=$FORCE_MIN" >> "$GITHUB_OUTPUT"
+          echo "cl_zh=$CL_ZH" >> "$GITHUB_OUTPUT"
+          echo "cl_en=$CL_EN" >> "$GITHUB_OUTPUT"
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Install minisign
+        run: |
+          MINISIGN_VERSION="0.11"
+          curl -fsSL "https://github.com/jedisct1/minisign/releases/download/${MINISIGN_VERSION}/minisign-${MINISIGN_VERSION}-linux.tar.gz" \
+            | tar -xz --strip-components=2 -C /usr/local/bin "minisign-linux/x86_64/minisign"
+          chmod +x /usr/local/bin/minisign
+          minisign -v
+
+      - name: Assemble checksums and sign
+        id: sign
+        env:
+          MINISIGN_SECRET_KEY_B64: ${{ secrets.MINISIGN_SECRET_KEY_B64 }}
+          MINISIGN_KEY_PASSWORD: ${{ secrets.MINISIGN_KEY_PASSWORD }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          mkdir -p "releases/v${VERSION}"
+          CHECKSUMS_FILE="releases/v${VERSION}/checksums.txt"
+          > "$CHECKSUMS_FILE"
+          for dir in dist/palacms-*/; do
+            tarball="$(ls "$dir"*.tar.gz 2>/dev/null | head -1)"
+            if [[ -n "$tarball" ]]; then
+              sha256sum "$tarball" | awk '{print $1"  "'$tarball'}' \
+                | sed 's|dist/palacms-[^/]*/||' >> "$CHECKSUMS_FILE"
+            fi
+          done
+          cat "$CHECKSUMS_FILE"
+          # Sign with minisign (-t adds a trusted comment with the version)
+          echo "$MINISIGN_SECRET_KEY_B64" | base64 -d > /tmp/release.key
+          echo "$MINISIGN_KEY_PASSWORD" \
+            | minisign -S -s /tmp/release.key \
+                -t "goco-releases v${VERSION}" \
+                -m "$CHECKSUMS_FILE"
+          rm -f /tmp/release.key
+          # Store the inline base64 signature for embedding into releases.json
+          CHECKSUMS_MINISIG_B64="$(base64 -w0 "${CHECKSUMS_FILE}.minisig")"
+          echo "checksums_minisig_b64=${CHECKSUMS_MINISIG_B64}" >> "$GITHUB_OUTPUT"
+
+      - name: Build artifact metadata and update releases.json
+        id: update_json
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+          IS_FORCED: ${{ steps.resolve.outputs.is_forced }}
+          FORCE_MIN: ${{ steps.resolve.outputs.force_min }}
+          CL_ZH: ${{ steps.resolve.outputs.cl_zh }}
+          CL_EN: ${{ steps.resolve.outputs.cl_en }}
+          CHECKSUMS_MINISIG_B64: ${{ steps.sign.outputs.checksums_minisig_b64 }}
+        run: |
+          node <<'NODE'
+          const fs   = require('node:fs');
+          const path = require('node:path');
+
+          const version   = process.env.VERSION;
+          const isForced  = process.env.IS_FORCED === 'true';
+          const forceMin  = process.env.FORCE_MIN  || version;
+          const clZh      = process.env.CL_ZH || '';
+          const clEn      = process.env.CL_EN || '';
+          const sigB64    = process.env.CHECKSUMS_MINISIG_B64 || '';
+
+          // Collect per-artifact metadata.
+          const artifacts = [];
+          const distDir   = 'dist';
+          for (const entry of fs.readdirSync(distDir)) {
+            const metaPath = path.join(distDir, entry, 'artifact-meta.json');
+            if (!fs.existsSync(metaPath)) { continue; }
+            const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+            meta.minisig = '';          // per-file sig not used; checksums.txt sig covers all
+            meta.checksums_minisig_b64 = sigB64;
+            meta.download_url =
+              `https://github.com/3mmmbulus/goco-releases/releases/download/v${version}/${meta.filename}`;
+            artifacts.push(meta);
+          }
+
+          const releaseEntry = {
+            version,
+            published_at: new Date().toISOString(),
+            is_forced:    isForced,
+            force_reason: null,
+            changelog:    { zh: clZh, en: clEn },
+            artifacts
+          };
+
+          // Write per-version release.json.
+          fs.mkdirSync(`releases/v${version}`, { recursive: true });
+          fs.writeFileSync(
+            `releases/v${version}/release.json`,
+            JSON.stringify(releaseEntry, null, 2) + '\n'
+          );
+
+          // Update root releases.json.
+          const index = JSON.parse(fs.readFileSync('releases.json', 'utf8'));
+          index.latest = version;
+          if (isForced) { index.force_min_version = forceMin; }
+          // Prepend new entry; deduplicate by version.
+          const existing = (index.releases || []).filter(r => r.version !== version);
+          index.releases = [releaseEntry, ...existing];
+          fs.writeFileSync('releases.json', JSON.stringify(index, null, 2) + '\n');
+
+          console.log(`Updated releases.json: latest=${version}, artifacts=${artifacts.length}`);
+          NODE
+
+      - name: Create GitHub Release
+        id: gh_release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_PUSH_TOKEN || github.token }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          TAG="v${VERSION}"
+          # Collect tarballs and the checksums + signature files.
+          FILES=()
+          for dir in dist/palacms-*/; do
+            for f in "$dir"*.tar.gz; do [[ -f "$f" ]] && FILES+=("$f"); done
+          done
+          FILES+=("releases/v${VERSION}/checksums.txt"
+                  "releases/v${VERSION}/checksums.txt.minisig")
+          gh release create "$TAG" \
+            --repo "${{ github.repository }}" \
+            --title "palacms v${VERSION}" \
+            --notes "See releases/v${VERSION}/release.json for changelog and checksums." \
+            "${FILES[@]}"
+
+      - name: Commit updated releases.json
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add releases.json "releases/v${VERSION}/"
+          git commit -m "release: v${VERSION}"
+          git push
